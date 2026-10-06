@@ -1,0 +1,103 @@
+---
+title: "Test"
+format: html
+---
+
+```{r}
+library(DatabaseConnector)
+packageVersion("DatabaseConnector")
+find.package("DatabaseConnector")
+```
+
+```{r}
+library(DatabaseConnector)
+
+# Using Eunomia -- will download with each R session
+connection <- connect(Eunomia::getEunomiaConnectionDetails())
+
+querySql(connection = connection,
+         sql = "SELECT COUNT(*) AS subjects FROM person;")
+
+disconnect(connection)
+```
+```{r}
+# Using DuckDB
+absoluteFileName <- file.path(getwd(), "data", "synthetic.duckdb")
+
+connection <- connect(dbms = "duckdb", server = absoluteFileName)
+
+querySql(connection = connection,
+         sql = "SELECT COUNT(*) AS subjects FROM person;")
+```
+```{r}
+file.exists(absoluteFileName)
+file.info(absoluteFileName)$size
+```
+
+```{r}
+absoluteFileName
+normalizePath(absoluteFileName)
+file.info(absoluteFileName)[, c("size", "mtime")]
+```
+
+
+```{r}
+querySql(
+  connection,
+  "SELECT database_name, path, type
+   FROM duckdb_databases();"
+)
+```
+
+```{r}
+querySql(
+  connection,
+  "SELECT database_name, path, type
+   FROM duckdb_databases();"
+)
+```
+```{r}
+querySql(
+  connection,
+  "SELECT *
+   FROM duckdb_schemas();"
+)
+```
+
+```{r}
+con <- file(absoluteFileName, "rb")
+readBin(con, "raw", n = 32)
+close(con)
+```
+
+```{r}
+file.info(absoluteFileName)$size
+
+disconnect(connection)
+```
+
+```{r}
+library(DatabaseConnector)
+
+getwd()
+
+absoluteFileName <- file.path(getwd(), "data", "synthetic.duckdb")
+
+file.info(absoluteFileName)$size
+
+connection <- connect(
+  dbms = "duckdb",
+  server = absoluteFileName
+)
+```
+```{r}
+disconnect(connection)
+```
+
+
+
+
+
+
+
+
