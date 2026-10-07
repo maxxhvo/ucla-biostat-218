@@ -2,3 +2,4 @@
 
 Course website for Biomath 218.
 
+WEBSITE LINK: https://ucla-biostat-218.github.io/
