@@ -1513,16 +1513,16 @@
     },
     "duckdb": {
       "Package": "duckdb",
-      "Version": "1.5.5",
+      "Version": "1.5.6",
       "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
+      "Depends": [
         "DBI",
-        "R",
+        "R (>= 4.2.0)"
+      ],
+      "Imports": [
         "methods",
         "utils"
-      ],
-      "Hash": "a51016a5a799c29ff482425c9964219c"
+      ]
     },
     "evaluate": {
       "Package": "evaluate",
