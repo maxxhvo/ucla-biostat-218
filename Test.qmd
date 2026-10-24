@@ -90,6 +90,7 @@ connection <- connect(
   server = absoluteFileName
 )
 ```
+
 ```{r}
 disconnect(connection)
 ```
