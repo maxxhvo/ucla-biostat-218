@@ -1,0 +1,497 @@
+---
+title: "Structured query language"
+format: html
+---
+
+```{r}
+library(DatabaseConnector)
+packageVersion("DatabaseConnector")
+find.package("DatabaseConnector")
+```
+
+## Connecting to various RDBMS
+
+Database Connector is an R package for connecting to various RDBMS using Java’s JDBC drivers (broad compatibility)
+
+- SQL Server, Oracle, PostgreSQL, PDW, Snowflake, Spark, RedShift, Azure Synapse, BigQuery, Netezza, Impala, SQLite, DuckDB
+
+```{r}
+# library(DatabaseConnector)
+
+# Using Eunomia -- will download with each R session
+connection <- connect(Eunomia::getEunomiaConnectionDetails())
+
+querySql(connection = connection,
+         sql = "SELECT COUNT(*) AS subjects FROM person;")
+
+disconnect(connection)
+```
+
+Simple connection to our synthetic database
+
+```{r}
+# library(DatabaseConnector)
+absoluteFileName <- file.path(getwd(), "data", "synthetic.duckdb")
+
+connection <- connect(dbms = "duckdb", server = absoluteFileName)
+sql <- "SELECT COUNT(*) AS subjects FROM person;"
+
+querySql(connection = connection,
+         sql = sql)
+
+disconnect(connection)
+```
+
+## Via higher-level `dplyr` / `dbplyr`
+
+For limited RDBMS (PostgreSQL, SQLite, DuckDB), we may use `dplyr` directly
+
+```{r}
+library(dplyr) # higher level commands
+connection <- connect(dbms = "duckdb", server = absoluteFileName)
+
+person <- tbl(connection, "person")         # table reference (not in-memory)
+concept <- tbl(connection, "concept")       # table reference
+vocabulary <- tbl(connection, "vocabulary") # table reference
+
+person %>% group_by(gender_concept_id) %>%  # execute query
+  summarise(count = n())
+```
+
+```{r}
+person %>% group_by(gender_concept_id) %>%
+  summarise(count = n()) %>%
+  show_query()                # remember GROUP BY is higher priority than SELECT
+```
+
+```{r}
+person %>% group_by(gender_concept_id) %>%
+  summarise(count = n()) %>%
+  inner_join(concept %>% select(concept_id, concept_name), 
+             by=c("gender_concept_id" = "concept_id"))
+```
+
+Utilizing `show_query()` to provide relatively optimized postgreSQL for dbplyr query
+
+```{r}
+person %>% group_by(gender_concept_id) %>%
+  summarise(count = n()) %>%
+  inner_join(concept %>% select(concept_id, concept_name), 
+             by=c("gender_concept_id" = "concept_id")) %>%
+  show_query()                  # note the subquery ~ provides the postgreSQL
+```
+
+```{r}
+disconnect(connection)
+```
+
+## Handling SQL dialects
+
+A simple example of SQL variation across RDBMS:
+
+**SQL Server**
+
+```         
+SELECT TOP 10 * FROM person;
+```
+
+**PostgreSQL**
+
+`SELECT * FROM person LIMIT 10;`
+
+Solution: SqlRender package can translate from one standard dialect (OHDSI SQL) to all other supported dialects … write once; use many! OHDSI SQL is mainly a subset of the SQL Server dialect
+
+```{r}
+# install.packages("SqlRender")
+library("SqlRender")
+```
+
+## SQL parameterization
+
+`SqlRender` also provides programmatic **parameterization** via a simple markup syntax (using the `@` prefix for parameters) of
+
+SQL values:
+
+```{r}
+sql <- "SELECT * FROM concept WHERE concept_id = @a;"
+render(sql, a = 123)
+```
+
+SQL tables and fields (**not** provided by most RDBMS
+
+```{r}
+sql <- "SELECT * FROM @x WHERE person_id = @a;"
+render(sql, x = "observation", a = 123)
+```
+
+Parameter values can numbers, strings, booleans and (conveniently) even vectors
+
+```{r}
+sql <- "SELECT * FROM concept WHERE concept_id IN (@a);"
+render(sql, a = c(123, 234, 345))
+```
+
+**SqlRender** Example:
+
+```{r}
+sql <- "SELECT TOP 10 * FROM person;"
+translate(sql, targetDialect = "postgresql") # specify the target dialect
+```
+
+## Conditional SQL generation
+
+To turn blocks of code on or off based on the parameter values, `SqlRender` adds a ternary operator:
+
+- `{ Condition } ? { if true } : { if false }`
+
+```{r}
+sql <- "SELECT * FROM cohort {@x == 1} ? {WHERE subject_id = 1};"
+render(sql,x = 1)
+```
+
+```{r}
+render(sql,x = 2)
+```
+
+## Databases and schema
+
+Different RDBMS handle collections of tables differently
+
+- Some enforce a single `database` with multiple `schema`
+
+- Others enforce multiple `database`s each with a single `schema`
+
+Solution: concatenate `database` and `schema` into single parameter `@databaseSchema`
+
+```         
+SELECT * FROM @databaseSchema.person
+```
+
+- **SQL Server** - `databaseSchema = "cdm_data.dbo"`
+
+- **PostgreSQL** - `databaseSchema = "cdm_data"`
+
+## Simple SQL function example
+
+\~ optimize SQL queries, by starting from foundational methods to achieve an outcome
+
+```{r}
+connection <- connect(dbms = "duckdb", server = absoluteFileName)
+
+sql <- "
+SELECT MAX(YEAR(observation_period_end_date) -
+           year_of_birth) AS max_age
+FROM @cdm.person
+INNER JOIN @cdm.observation_period
+  ON person.person_id = observation_period.person_id;
+"
+
+renderTranslateQuerySql(connection = connection, sql = sql,
+                        cdm = "synthetic.main")
+```
+
+```{r}
+connection <- connect(dbms = "duckdb", server = absoluteFileName)
+
+sql <- "
+SELECT MAX(DATEDIFF(
+          YEAR, birth_datetime, observation_period_end_date)
+       ) AS max_age
+FROM @cdm.person
+INNER JOIN @cdm.observation_period
+  ON person.person_id = observation_period.person_id;
+"
+
+renderTranslateQuerySql(connection = connection, sql = sql,
+                        cdm = "synthetic.main")
+```
+
+```{r}
+disconnect(connection)
+
+cat(translate(sql, targetDialect = "duckdb"))
+```
+
+## Incidence rate study
+
+ACE inhibitors are the most popular treatment for essential hypertension. Hypertensive patients suffer from acute myocardial infarctions (AMI). What is rate of AMI in the first year following lisinopril treatment initiation, stratified by age and gender?
+
+We need to define (and implement in SQL):
+
+- **Exposure** - first exposure to lisinopril with ≥ 365 days of observation prior to first exposure. NB: overly simplified for clinical use
+
+- **Outcome** - any occurrence of an acute myocardial infarction diagnosis code during an inpatient or emergency room (ER) visit
+
+- **Time-at-risk** - compute the incidence rate of **outcome** in the first year after **exposure**
+
+> ***The Following example of manually creating hand-coded analysis is not best practice. Remains the issue of standardization***
+
+### Create a `COHORT` table
+
+```{r}
+conn <- connect(dbms = "duckdb", server = absoluteFileName)
+cdmDbSchema <- "synthetic.main"
+cohortDbSchema <- "synthetic.main"  # often somewhere else
+cohortTable <- "my_cohorts"
+
+
+# look at my tables, if it exists get rid of it and create a new table
+sql <- "
+DROP TABLE IF EXISTS @cohort_db_schema.@cohort_table;
+CREATE TABLE @cohort_db_schema.@cohort_table (
+  cohort_definition_id INT,
+  cohort_start_date DATE,
+  cohort_end_date DATE,
+  subject_id BIGINT   -- for some period of time
+);
+"
+renderTranslateExecuteSql(conn, sql,
+                          cohort_db_schema = cohortDbSchema,
+                          cohort_table = cohortTable)
+```
+
+### Build exposure cohort
+
+```{r}
+sql <- "
+INSERT INTO @cohort_db_schema.@cohort_table (
+  cohort_definition_id,
+  cohort_start_date,
+  cohort_end_date,
+  subject_id
+)
+SELECT 1 AS cohort_definition_id,
+  cohort_start_date,
+  cohort_end_date,
+  subject_id
+FROM (
+  SELECT drug_era_start_date AS cohort_start_date,
+    drug_era_end_date AS cohort_end_date,
+    person_id AS subject_id
+  FROM (
+    SELECT drug_era_start_date,
+      drug_era_end_date,
+      person_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY person_id
+            ORDER BY drug_era_start_date
+      ) order_nr
+    FROM @cdm_db_schema.drug_era
+    WHERE drug_concept_id = 1308216 -- Lisinopril
+  ) ordered_exposures
+  WHERE order_nr = 1
+) first_era
+INNER JOIN @cdm_db_schema.observation_period
+  ON subject_id = person_id
+    AND observation_period_start_date < cohort_start_date
+    AND observation_period_end_date > cohort_start_date
+WHERE DATEDIFF(DAY,
+               observation_period_start_date,
+               cohort_start_date) >= 365;
+"
+  
+renderTranslateExecuteSql(conn, sql,
+                          cohort_db_schema = cohortDbSchema,
+                          cohort_table = cohortTable,
+                          cdm_db_schema = cdmDbSchema)
+```
+
+- Take first drug exposure per person from `DRUG_ERA`
+
+- Join to `OBSERVATION_PERIOD` during exposure and require prior observation time
+
+### Build outcome cohort
+
+```{r}
+sql <- "
+INSERT INTO @cohort_db_schema.@cohort_table (
+ cohort_definition_id,
+ cohort_start_date,
+ cohort_end_date,
+subject_id
+)
+SELECT 2 AS cohort_definition_id,
+  cohort_start_date,
+  cohort_end_date,
+  subject_id
+FROM (
+  SELECT DISTINCT person_id AS subject_id,
+    condition_start_date AS cohort_start_date,
+    condition_end_date AS cohort_end_date
+  FROM @cdm_db_schema.condition_occurrence
+  INNER JOIN @cdm_db_schema.concept_ancestor
+    ON condition_concept_id = descendant_concept_id
+  WHERE ancestor_concept_id = 4329847 -- Acute MI
+) distinct_occurrence
+INNER JOIN @cdm_db_schema.visit_occurrence
+  ON subject_id = person_id
+  AND visit_start_date <= cohort_start_date
+  AND visit_end_date >= cohort_start_date
+WHERE visit_concept_id IN (262, 9203,
+    9201) -- Inpatient or ER;
+"
+  
+renderTranslateExecuteSql(conn, sql,
+                          cohort_db_schema = cohortDbSchema,
+                          cohort_table = cohortTable,
+                          cdm_db_schema = cdmDbSchema)
+```
+
+- Join `CONDITION_OCCURRENCE` to `CONCEPT_ANCESTOR` to find all occurrences of AMI or any of its descendents (more later)
+
+- Use `DISTINCT` to select at most one record per day
+
+- Join `VISIT_OCCURENCE` to ensure diagnosis was in-patient or ER
+
+## Calculate incidence rate
+
+```{r}
+sql <- "
+WITH tar AS (       --tar designates a temporary table
+  SELECT concept_name AS gender,
+    FLOOR((YEAR(cohort_start_date) -
+          year_of_birth) / 10) AS age,
+    subject_id,
+    cohort_start_date,
+    CASE WHEN DATEADD(DAY, 365, cohort_start_date) >
+      observation_period_end_date
+    THEN observation_period_end_date
+    ELSE DATEADD(DAY, 365, cohort_start_date)
+    END AS cohort_end_date
+  FROM @cohort_db_schema.@cohort_table
+  INNER JOIN @cdm_db_schema.observation_period
+    ON subject_id = observation_period.person_id
+      AND observation_period_start_date < cohort_start_date
+      AND observation_period_end_date > cohort_start_date
+  INNER JOIN @cdm_db_schema.person
+    ON subject_id = person.person_id
+  INNER JOIN @cdm_db_schema.concept
+    ON gender_concept_id = concept_id
+  WHERE cohort_definition_id = 1 -- Exposure
+)
+SELECT days.gender,
+    days.age,
+    days,
+    CASE WHEN events IS NULL THEN 0 ELSE events END AS events
+FROM (
+  SELECT gender,
+    age,
+    SUM(DATEDIFF(DAY, cohort_start_date,
+      cohort_end_date)) AS days
+  FROM tar
+  GROUP BY gender,
+    age
+) days
+LEFT JOIN (
+  SELECT gender,
+      age,
+      COUNT(*) AS events
+  FROM tar
+  INNER JOIN @cohort_db_schema.@cohort_table ami
+    ON tar.subject_id = ami.subject_id
+      AND tar.cohort_start_date <= ami.cohort_start_date
+      AND tar.cohort_end_date >= ami.cohort_start_date
+  WHERE cohort_definition_id = 2 -- Outcome
+  GROUP BY gender,
+    age
+) events
+ON days.gender = events.gender
+  AND days.age = events.age;
+"
+  
+  results <- renderTranslateQuerySql(conn, sql,
+                                     cohort_db_schema = cohortDbSchema,
+                                     cohort_table = cohortTable,
+                                     cdm_db_schema = cdmDbSchema,
+                                     snakeCaseToCamelCase = TRUE)
+  
+  disconnect(conn)
+```
+
+### Examine results
+
+```{r}
+# Compute incidence rate (IR)
+results$ir <-  results$events / (results$days / 365.25)
+
+# Fix age scale
+results$age <- results$age * 10
+
+library(ggplot2)
+ggplot(results, aes(x = age, y = ir, group = gender, color = gender)) +
+  geom_line() +
+  xlab("Age") +
+  ylab("Incidence (per patient year)")
+```
+
+One study, one database, one (almost unusable) script …
+
+**You do not want to do things this way!**
+
+## DEBUG
+
+```{r}
+file.exists(absoluteFileName)
+file.info(absoluteFileName)$size
+```
+
+```{r}
+absoluteFileName
+normalizePath(absoluteFileName)
+file.info(absoluteFileName)[, c("size", "mtime")]
+```
+
+```{r}
+querySql(
+  connection,
+  "SELECT database_name, path, type
+   FROM duckdb_databases();"
+)
+```
+
+```{r}
+querySql(
+  connection,
+  "SELECT database_name, path, type
+   FROM duckdb_databases();"
+)
+```
+
+```{r}
+querySql(
+  connection,
+  "SELECT *
+   FROM duckdb_schemas();"
+)
+```
+
+```{r}
+con <- file(absoluteFileName, "rb")
+readBin(con, "raw", n = 32)
+close(con)
+```
+
+```{r}
+file.info(absoluteFileName)$size
+
+disconnect(connection)
+```
+
+```{r}
+library(DatabaseConnector)
+
+getwd()
+
+absoluteFileName <- file.path(getwd(), "data", "synthetic.duckdb")
+
+file.info(absoluteFileName)$size
+
+connection <- connect(
+  dbms = "duckdb",
+  server = absoluteFileName
+)
+```
+
+```{r}
+disconnect(connection)
+```

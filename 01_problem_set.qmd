@@ -1,0 +1,134 @@
+---
+title: "Bostat 218 Problem Set 1"
+subtitle: "Due Oct 31 @ 11:59PM in PDF via BruinLearn"
+author: "Marc A Suchard @ UCLA"
+date: "October 8, 2025"
+format:
+  html:
+    theme: cosmo
+    number-sections: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    code-fold: false
+bibliography: "../ohdsi.bib"
+csl: "apa.csl"
+knitr:
+  opts_chunk: 
+    fig.align: 'center'
+    fig.width: 6
+    fig.height: 4
+    message: FALSE
+    cache: false
+---
+
+## OMOP CDM
+
+1. John is an African American man born on August 4, 1974.  Define an entry in the `PERSON` table that encodes this information.
+
+https://ohdsi.github.io/TheBookOfOhdsi/CommonDataModel.html
+
+```{r}
+library(DBI)
+library(Eunomia)
+
+cd   <- getEunomiaConnectionDetails()
+conn <- DatabaseConnector::connect(cd)
+# DBI::dbGetQuery(conn, "PRAGMA table_info(person)")
+```
+```{r}
+spec <- read.csv(system.file("csv", "OMOP_CDMv5.4_Field_Level.csv",
+                             package = "CommonDataModel"))
+subset(spec, cdmTableName == "person",
+       select = c(cdmFieldName, isRequired, cdmDatatype, userGuidance))
+```
+```{r}
+# Proof of Concept for Identifying ConceptIDs
+
+# Gender
+DatabaseConnector::querySql(conn, "
+  SELECT concept_id, concept_name, vocabulary_id, standard_concept
+  FROM main.concept
+  WHERE domain_id = 'Gender' AND standard_concept = 'S'")
+```
+
+```{r}
+library(dplyr)
+
+person_spec <- spec |>
+  filter(cdmTableName == "person") |>
+  select(cdmFieldName, cdmDatatype) #|>
+  #mutate(Value = NA_character_,
+  #       Explanation = NA_character_)
+```
+
+```{r}
+known_entries <- tibble::tribble(
+  ~cdmFieldName,          ~Value,                 ~Explanation,
+  "person_id",            "999999",               "Arbitrary unique ID",
+  "gender_concept_id",    "8507",                 "MALE",
+  "year_of_birth",        "1974",                 "From birth date",
+  "month_of_birth",       "8",                    "From birth date",
+  "day_of_birth",         "4",                    "From birth date",
+  "birth_datetime",       "1974-08-04 00:00:00",  "Time unknown, set to midnight",
+  "race_concept_id",      "8516",                 "Black or African American",
+  "ethnicity_concept_id", "0",                    "Hispanic status not stated",
+  "person_source_value",  "John",                 "Source identifier",
+  "gender_source_value",  "male",                 "Source wording",
+  "race_source_value",    "African American",     "Source wording"
+)
+```
+
+```{r}
+person_tbl <- person_spec |>
+  left_join(entries, by = "cdmFieldName") |>
+  select(-cdmDatatype)
+
+knitr::kable(person_tbl)
+```
+
+
+
+2. John enrolled in his current insurance on January 1st, 2015. The data from his insurance database were extracted on July 1st, 2019. Define an entry in the `OBSERVATION_PERIOD` table that encodes this information.
+
+3. John was prescribed a 30-day supply of Ibuprofen 200 MG Oral tablets (NDC code: 76168009520) on May 1st, 2019. Define an entry in the `DRUG_EXPOSURE` table that encodes this information.
+
+4. Using SQL and R, retrieve all records of the condition "Gastrointestinal hemorrhage" (with concept ID [192671](http://athena.ohdsi.org/search-terms/terms/192671)) from the `Eunomia` dataset.
+
+```{r}
+library(Eunomia)
+library(DatabaseConnector)
+
+# connect to Eunomia dataset
+cd   <- getEunomiaConnectionDetails()
+conn <- DatabaseConnector::connect(cd)
+
+# disconnect(conn)
+```
+
+
+5. Using SQL and R, retrieve all records of the condition "Gastrointestinal hemorrhage" using source codes. This database uses ICD-10, and the relevant ICD-10 code is "K92.2" from the `Eunomia` dataset.
+
+6. Using SQL and R, retrieve the observation period of the person with `PERSON_ID` 61 from the `Eunomia dataset.
+
+## Standardize vocabularies
+
+7. What is the standard concept ID for "Gastrointestinal hemorrhage"?
+```{r}
+DatabaseConnector::querySql(conn, "
+  SELECT concept_id, concept_name, concept_code
+  FROM concept
+  WHERE concept_name = 'Gastrointestinal hemorrhage';")
+```
+The standard concept ID for "Gastrointestinal hemorrhage" is 192671.
+
+8. Which ICD-10CM codes map to the standard concept for "Gastrointestinal hemorrhage"? Which ICD-9CM codes map to this Standard Concept?
+
+
+https://github.com/OHDSI/OMOP-Queries/blob/master/md/General.md
+
+## Advanced SQL
+
+9. What is the minimum, maximum, and mean length (in days) of observation from the `synthetic` dataset? (Hint: you can use the `DATEDIFF` function to compute the time between two dates.)
+
+10. How many people have at least one prescription of celecoxib from the `Eunomia` dataset? (Note: there’s an easy way to do this, using `DRUG_ERA`, and a harder way using `DRUG_EXPOSURE` and `CONCEPT_ANCESTOR`. Can you do both?)
