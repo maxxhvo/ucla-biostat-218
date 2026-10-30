@@ -1,0 +1,339 @@
+---
+title: "HADES"
+format: html
+---
+
+# HADES - open-source software for observational research
+
+<https://ucla-biostat-218.github.io/slides/05_hades.revealjs.html#/title-slide>
+
+# Characterization
+
+Cohort Characterization: describes the baseline (and post-index) characteristics of people in a cohort
+
+## DEFAULT Covariates
+
+```{r}
+library(FeatureExtraction)
+covariateSettings <- createDefaultCovariateSettings(
+  excludedCovariateConceptIds = 1124300, # exclude diclofenac
+  addDescendantsToExclude = TRUE         # and all descendants
+)
+
+covariateSettings
+```
+
+PRE-specifying Covariates
+
+NOTE: Many pre-specified sets have default time-windows (related to index)
+
+- **Long term**: 365 days prior up to and including cohort start date
+
+- **Medium term**: 180 days prior up to and including cohort start date
+
+- **Short term**: 30 days prior up and to including cohort start date
+
+```{r}
+covariateSettings <- createCovariateSettings(
+  useDemographicsGender = TRUE,
+  useDemographicsAgeGroup = TRUE,
+  useConditionEraLongTerm = TRUE,  # `condition_occurrence` table
+  useConditionEraShortTerm = TRUE,
+  useDrugEraLongTerm = TRUE,       # `drug_exposure` table
+  useDrugEraShortTerm = TRUE,
+  longTermStartDays = -180,
+  shortTermStartDays = -14,
+  endDays = -1)      # exclude index-date
+```
+
+## **Aggregrated covariates**
+
+Use `aggregated = TRUE` to return cohort-level summary statistics
+
+- Saves time and space (depending in analysis)
+
+- Can convert unaggregated data object into aggregated (if both are needed)
+
+- Characterization along with incidence rates (how often do people get the disease / outcome) are often of sufficient research interest alone to warrant publication
+
+`covariateData2 <- aggregateCovariates(covariateData)`
+
+## **Incidence**
+
+Incidence rates (and proportions) assess the occurrence of a new outcome (entry into outcome (O) cohort) in a population (in a target (T) cohort) during a **time-at-risk** (TAR)
+
+Two metrics:
+
+Incidence proportion=# persons in cohort with new outcome during TAR# persons in cohort with TAR
+
+- Proportion of the population of interest that developed the outcome in a defined timeframe
+
+Incidence rate=# persons in cohort with new outcome during TARperson time at risk contributed by persons in cohort
+
+- Number of outcomes during the cumulative TAR for the population. (individual contribution to TAR stops at outcome occurrence)
+
+## **Using `CohortIncidence`**
+
+- We want to compute the incidence of heart attacks (acute myocardial infarctions) among (newly diagnosed) hypertensive patients
+
+- We need to define 2 cohorts: **AMI** and **hypertension**
+
+- Then we will use `Capr`, `FeatureExtraction` and `CohortIncidence` packages to handle the hard-work
+
+## Review of Creating Cohorts
+
+NOTE: By default, cohort IDs are 1, 2, 3 …
+
+```{r}
+library(Capr)
+
+# Hypertension
+essentialHypertension <- cs(
+  descendants(320128),
+  name = "Essential hypertension"
+)
+
+sbp <- cs(3004249, name = "SBP")
+dbp <- cs(3012888, name = "DBP")
+
+hypertensionCohort <- cohort(
+  entry = entry(                 # Entrance based on any of these
+    conditionOccurrence(essentialHypertension),
+    # measurementUnit is unit() in older iterations of Capr
+    measurement(sbp, valueAsNumber(gte(130)), Capr::measurementUnit(8876)),
+    measurement(dbp, valueAsNumber(gte(80)), Capr::measurementUnit(8876))
+  ),
+  exit = exit(
+    endStrategy = observationExit()
+  )
+)
+
+# Acute myocardial infarction
+myocardialInfarction <- cs(
+  descendants(4329847),
+  exclude(descendants(314666)), # Old myocardial infarction
+  name = "Myocardial infarction"
+)
+inpatientOrEr <- cs(
+  descendants(9201),
+  descendants(262),
+  name = "Inpatient or ER"
+)
+amiCohort <- cohort(
+  entry = entry(
+    conditionOccurrence(myocardialInfarction),
+    additionalCriteria = withAll(
+      atLeast(1,
+              visit(inpatientOrEr),
+              aperture = duringInterval(eventStarts(-Inf, 0), eventEnds(0, Inf)))
+    ),
+    primaryCriteriaLimit = "All",
+    qualifiedLimit = "All"
+  ),
+  attrition = attrition(
+    "No prior AMI" = withAll(
+      exactly(0,
+              conditionOccurrence(myocardialInfarction),
+              duringInterval(eventStarts(-365, -1)))
+    )
+  ),
+  exit = exit(
+    endStrategy = fixedExit(index = "startDate", offsetDays = 1)
+  )
+)
+cohortDefinitionSet <- makeCohortSet(hypertensionCohort, amiCohort)
+
+cohortDefinitionSet
+```
+
+## **Cohort generation**
+
+Use `CohortGenerator` ([link](https://ohdsi.github.io/CohortGenerator/)) to build the `cohort` tables and instantiate our cohorts
+
+```{r}
+connectionDetails <- DatabaseConnector::createConnectionDetails(
+  dbms = "duckdb", 
+  server = file.path(getwd(), "data", "synthetic.duckdb"))
+
+cohortTableNames <- CohortGenerator::getCohortTableNames(
+  cohortTable = "my_cohorts")
+
+CohortGenerator::createCohortTables(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = "main",
+  cohortTableNames = cohortTableNames)
+
+cohortsGenerated <- CohortGenerator::generateCohortSet(
+  connectionDetails = connectionDetails,
+  cdmDatabaseSchema = "main",
+  cohortDatabaseSchema = "main",
+  cohortTableNames = cohortTableNames,
+  cohortDefinitionSet = cohortDefinitionSet)
+```
+
+```{r}
+CohortGenerator::getCohortCounts(
+  connectionDetails = connectionDetails,
+  cohortDatabaseSchema = "main",
+  cohortTable = cohortTableNames$cohortTable
+)
+```
+
+## **Characterization computation**
+
+Use `FeatureExtraction` ([link](https://ohdsi.github.io/FeatureExtraction/)) to characterize the population of patients experiencing an AMI
+
+```{r}
+library(FeatureExtraction)
+covariateSettings <- createDefaultCovariateSettings()
+
+covariateData <- getDbCovariateData(
+  connectionDetails = connectionDetails,
+  cdmDatabaseSchema = "main",
+  cohortDatabaseSchema = "main",
+  cohortTable = cohortTableNames$cohortTable,
+  cohortIds = c(2),    # AMI
+  rowIdField = "subject_id",
+  covariateSettings = covariateSettings
+)
+```
+
+```{r}
+summary(covariateData)
+```
+
+## **Structure of `covariateData`**
+
+Person-level covariates can occupy up to 2GB of RAM, so this **design matrix** is held
+
+- In *sparse* (row, column, value)-type format
+
+- On disk via a temporary `Andromeda` object (SQLite or DuckDB back-end)
+
+```{r}
+head(covariateData$covariates) # main object
+```
+
+Permanently save to / load from disk
+
+```{r}
+saveCovariateData(covariateData, "covariates")
+covariateData <- loadCovariateData("covariates")
+```
+
+Aggregate via
+
+```{r}
+covariateData2 <- aggregateCovariates(covariateData)
+```
+
+```{r}
+summary(covariateData2)
+
+head(covariateData2$covariatesContinuous)
+
+```
+
+## **A simple Table 1**
+
+A default summary table is available in `FeatureExtraction`. \~ customizable via:
+
+- Make disease-specific
+
+- Shorten to readibility
+
+- `getDefaultTable1Specifications()`
+
+```{r}
+result <- createTable1(
+  covariateData1 = covariateData2
+)
+
+result
+```
+
+## **Incidence computation**
+
+Use `CohortIncidence` ([link](https://ohdsi.github.io/CohortIncidence/)) to do the heavy-lifting
+
+- Plenty of sublety (e.g. cenoring TAR at event or observation end)
+
+```{r}
+# Target cohort is hypertension:
+targetList <- list(CohortIncidence::createCohortRef(
+  id = cohortDefinitionSet$cohortId[1],
+  name = cohortDefinitionSet$cohortName[1]))
+
+# Outcome cohort is AMI:
+outcomeList <- list(CohortIncidence::createOutcomeDef(
+  id = 1,
+  name = cohortDefinitionSet$cohortName[2], 
+  cohortId = cohortDefinitionSet$cohortId[2], 
+  cleanWindow = 365))
+
+# Specify the time-at-risk to coincide with the cohort start and end:
+tars <- list(CohortIncidence::createTimeAtRiskDef(
+  id = 1, 
+  startWith = "start", 
+  endWith = "end", 
+  startOffset = 0,
+  endOffset = 0))
+
+# All together:
+analysisList <- list(CohortIncidence::createIncidenceAnalysis(
+  targets = cohortDefinitionSet$cohortId[1],
+  outcomes = 1,
+  tars = 1))
+
+irDesign <- CohortIncidence::createIncidenceDesign(
+  targetDefs = targetList,
+  outcomeDefs = outcomeList,
+  tars = tars,
+  analysisList = analysisList,
+  strataSettings = CohortIncidence::createStrataSettings(
+    byYear = TRUE,
+    byGender = TRUE,
+    byAge = TRUE,
+    ageBreaks = seq(0, 110, by = 10)
+  )
+)
+
+buildOptions <- CohortIncidence::buildOptions(
+  cohortTable = cohortTableNames$cohortTable,
+  cdmDatabaseSchema = "main",
+  sourceName = "synthetic",
+  refId = 1)
+
+executeResults <- CohortIncidence::executeAnalysis(
+  connectionDetails = connectionDetails,
+  incidenceDesign = irDesign,
+  buildOptions = buildOptions)
+```
+
+## Plotting Preliminary Results
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+results <- executeResults$incidence_summary
+names(results) <- tolower(names(results))
+results <- results %>% filter(is.na(start_year),
+                              !is.na(gender_name),
+                              !is.na(age_group_id))
+
+ggplot(results, aes(x = age_group_id, 
+                    y = incidence_rate_p100py,
+                    group = gender_name, color = gender_name)) +
+  geom_point() +
+  xlab("Age group") +
+  ylab("Incidence (per 100 patient year)")
+```
+
+# Conclusions
+
+- `FeatureExtraction` provides standardized natural disease histories
+
+  - also delivers **design matrices** for prediction and causal inference
+
+- `CohortIncidence` provides standardized incidence rate / proportion calculations

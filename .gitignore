@@ -2,3 +2,12 @@
 .Rhistory
 .RData
 .Ruserdata
+
+
+# Strategus generated files
+strategusOutput/
+strategusWork/
+
+# Generated study inputs
+covariates
+data/studySpecifications.json

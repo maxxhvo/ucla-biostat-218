@@ -1,3 +1,5 @@
 *.zip
 *.duckdb
 *.rds
+*.wal
+*.sqlite

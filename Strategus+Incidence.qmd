@@ -1,0 +1,332 @@
+---
+title: "Strategus+Incidence"
+format: html
+---
+
+- What is the Strategus framework?
+
+- How to design fully distributable studies
+
+- About the Strategus “module” system
+
+- Managing and re-using results
+
+- https://ucla-biostat-218.github.io/slides/07_strategus.revealjs.html#/what-is-the-strategus-framework
+
+## **Study design**
+
+- We want to compute the incidence of heart attacks (acute myocardial infarctions) among (newly diagnosed) hypertensive patients
+
+- We need to define 2 cohorts: **AMI** and **hypertension**
+
+- Then we will use `Capr`, `Characterization` and `CohortIncidence` packages to handle the hard-work
+
+```{r}
+library(Capr)
+
+# Hypertension
+essentialHypertension <- cs(
+  descendants(320128),
+  name = "Essential hypertension"
+)
+
+sbp <- cs(3004249, name = "SBP")
+dbp <- cs(3012888, name = "DBP")
+
+hypertensionCohort <- cohort(
+  entry = entry(                 # Entrance based on any of these
+    conditionOccurrence(essentialHypertension),
+    measurement(sbp, valueAsNumber(gte(130)), measurementUnit(8876)),
+    measurement(dbp, valueAsNumber(gte(80)), measurementUnit(8876))
+  ),
+  exit = exit(
+    endStrategy = observationExit()
+  )
+)
+
+# Acute myocardial infarction
+myocardialInfarction <- cs(
+  descendants(4329847),
+  exclude(descendants(314666)), # Old myocardial infarction
+  name = "Myocardial infarction"
+)
+inpatientOrEr <- cs(
+  descendants(9201),
+  descendants(262),
+  name = "Inpatient or ER"
+)
+amiCohort <- cohort(
+  entry = entry(
+    conditionOccurrence(myocardialInfarction),
+    additionalCriteria = withAll(
+      atLeast(1,
+              visit(inpatientOrEr),
+              aperture = duringInterval(eventStarts(-Inf, 0), eventEnds(0, Inf)))
+    ),
+    primaryCriteriaLimit = "All",
+    qualifiedLimit = "All"
+  ),
+  attrition = attrition(
+    "No prior AMI" = withAll(
+      exactly(0,
+              conditionOccurrence(myocardialInfarction),
+              duringInterval(eventStarts(-365, -1)))
+    )
+  ),
+  exit = exit(
+    endStrategy = fixedExit(index = "startDate", offsetDays = 1)
+  )
+)
+cohortDefinitionSet <- makeCohortSet(hypertensionCohort, amiCohort)
+
+cohortDefinitionSet
+```
+
+## **Cohort generation specification**
+
+Use `Strategus` to create a **shareable** JSON specification
+
+NOTE: cohort specifications are not part of the `CohortGeneratorModule` specification. Cohort definitions are considered to be a **shared** resource, often used by multiple modules
+
+```{r}
+library(Strategus) # ensure using 1.5 for v3 Characterization objects
+
+# `Strategus` uses R6 classes (for better or worse) for modules
+cgModuleSettingsCreator <- CohortGeneratorModule$new()
+
+cohortDefinitionShared <- cgModuleSettingsCreator$createCohortSharedResourceSpecifications(cohortDefinitionSet)
+
+cohortGeneratorModuleSpecifications <- cgModuleSettingsCreator$createModuleSpecifications(
+  generateStats = TRUE
+)
+```
+
+## **Characterization analysis specification**
+
+Build `CharacterizationModule` specification
+
+```{r}
+timeAtRisks <- data.frame(
+  label = c("On treatment"),
+  riskWindowStart  = c(1),
+  startAnchor = c("cohort start"),
+  riskWindowEnd  = c(0),
+  endAnchor = c("cohort end")
+)
+
+cModuleSettingsCreator <- CharacterizationModule$new()
+
+characterizationModuleSpecifications <- cModuleSettingsCreator$createModuleSpecifications(
+  targetIds = c(1),  # hypertensive patient
+  outcomeIds = c(2), # ami
+  minPriorObservation = 365,
+  outcomeWashoutDays = c(365),
+  dechallengeStopInterval = 30,
+  dechallengeEvaluationWindow = 30,
+  riskWindowStart = timeAtRisks$riskWindowStart, 
+  startAnchor = timeAtRisks$startAnchor, 
+  riskWindowEnd = timeAtRisks$riskWindowEnd, 
+  endAnchor = timeAtRisks$endAnchor,
+  covariateSettings = FeatureExtraction::createDefaultCovariateSettings(),
+  minCharacterizationMean = .01
+)
+```
+
+## **Incidence analysis specification**
+
+Build a `CohortIncidenceModule` specification
+
+```{r}
+# Target cohort is hypertension:
+targetList <- list(CohortIncidence::createCohortRef(
+  id = cohortDefinitionSet$cohortId[1],
+  name = cohortDefinitionSet$cohortName[1]))
+
+# Outcome cohort is AMI:
+outcomeList <- list(CohortIncidence::createOutcomeDef(
+  id = 1,
+  name = cohortDefinitionSet$cohortName[2], 
+  cohortId = cohortDefinitionSet$cohortId[2], 
+  cleanWindow = 365))
+
+# Specify the time-at-risk to coincide with the cohort start and end:
+tars <- list(CohortIncidence::createTimeAtRiskDef(
+  id = 1, 
+  startWith = "start", 
+  endWith = "end", 
+  startOffset = 0,
+  endOffset = 0))
+
+# All together:
+analysisList <- list(CohortIncidence::createIncidenceAnalysis(
+  targets = cohortDefinitionSet$cohortId[1],
+  outcomes = 1,
+  tars = 1))
+irDesign <- CohortIncidence::createIncidenceDesign(
+  targetDefs = targetList,
+  outcomeDefs = outcomeList,
+  tars = tars,
+  analysisList = analysisList,
+  strataSettings = CohortIncidence::createStrataSettings(
+    byYear = TRUE,
+    byGender = TRUE,
+    byAge = TRUE,
+    ageBreaks = seq(0, 110, by = 10)
+  )
+)
+
+ciModuleSettingsCreator <- CohortIncidenceModule$new()
+cohortIncidenceModuleSpecifications <- ciModuleSettingsCreator$createModuleSpecifications(
+  irDesign = irDesign$toList()
+)
+```
+
+## **Full analysis specification**
+
+Combine the specifications (Legos) together
+
+**Federated analysis :** The file `studySpecification.json` is **all** that needs to be shared with data partners
+
+```{r}
+library(dplyr)
+
+analysisSpecifications <- Strategus::createEmptyAnalysisSpecifications() %>%
+  Strategus::addSharedResources(cohortDefinitionShared) %>%
+  Strategus::addModuleSpecifications(cohortGeneratorModuleSpecifications) %>%
+  Strategus::addModuleSpecifications(characterizationModuleSpecifications) %>%
+  Strategus::addModuleSpecifications(cohortIncidenceModuleSpecifications) 
+
+ParallelLogger::saveSettingsToJson(
+  analysisSpecifications,
+  file.path(getwd(), "data", "studySpecifications.json"))
+
+```
+
+## **Running `Strategus`**: 3 General Steps
+
+Read the specification
+
+```{r}
+analysisSpecifications <- ParallelLogger::loadSettingsFromJson(
+  file.path(getwd(), "data", "studySpecifications.json"))
+```
+
+Define the (local database) execution settings
+
+```{r}
+connectionDetails <- DatabaseConnector::createConnectionDetails(
+  dbms = "duckdb", 
+  server = file.path(getwd(), "data", "synthetic.duckdb"))
+
+executionSettings <- Strategus::createCdmExecutionSettings(
+  workDatabaseSchema = "main",
+  cdmDatabaseSchema = "main",
+  cohortTableNames = CohortGenerator::getCohortTableNames(
+    cohortTable = "my_cohorts"),
+  workFolder = file.path(getwd(), "strategusWork"),
+  resultsFolder = file.path(getwd(), "strategusOutput"),
+  minCellCount = 5)
+```
+
+Execution
+
+```{r}
+Strategus::execute(
+  analysisSpecifications = analysisSpecifications,
+  executionSettings = executionSettings,
+  connectionDetails = connectionDetails
+)
+```
+
+## **Managing results (overview)**
+
+- All results are in `strategusOutput`. We can inspect the CSV files and safely share these with others
+
+- Often we upload these files to a database using the `ResultsModelManager` package, and
+
+- View the results in a Shiny app using the `ShinyAppBuilder` package
+
+## **Placing results in a database**
+
+Specify the RDBMS and location
+
+```{r}
+resultsDatabaseSchema <- "main"
+resultsConnectionDetails <- DatabaseConnector::createConnectionDetails(
+  dbms = "sqlite",
+  server = file.path(getwd(), "data", "results.sqlite")
+)
+```
+
+Create the results data model on the RDBMS
+
+```{r}
+analysisSpecifications <- ParallelLogger::loadSettingsFromJson(
+  file.path(getwd(), "data", "studySpecifications.json")
+)
+resultsDataModelSettings <- Strategus::createResultsDataModelSettings(
+  resultsDatabaseSchema = resultsDatabaseSchema,
+  resultsFolder = file.path(getwd(), "strategusOutput")
+)
+Strategus::createResultDataModel(
+  analysisSpecifications = analysisSpecifications,
+  resultsDataModelSettings = resultsDataModelSettings,
+  resultsConnectionDetails = resultsConnectionDetails
+)
+```
+
+Upload results
+
+```{r}
+Strategus::uploadResults(
+  analysisSpecifications = analysisSpecifications,
+  resultsDataModelSettings = resultsDataModelSettings,
+  resultsConnectionDetails = resultsConnectionDetails)
+```
+
+Exploration
+
+```{r}
+library(DatabaseConnector)
+connection <- connect(resultsConnectionDetails)
+# explore
+disconnect(connection)
+```
+
+## **Create the Shiny app**
+
+```{r}
+library(ShinyAppBuilder)
+library(OhdsiShinyModules)
+
+shinyConfig <- initializeModuleConfig() |>
+  addModuleConfig(
+    createDefaultAboutConfig()
+  )  |>
+  addModuleConfig(
+    createDefaultDatasourcesConfig()
+  )  |>
+  addModuleConfig(
+    createDefaultCohortGeneratorConfig()
+  ) |>
+  addModuleConfig(
+    createDefaultCohortDiagnosticsConfig()
+  ) |>
+  addModuleConfig(
+    createDefaultCharacterizationConfig()
+  ) |>
+  addModuleConfig(
+    createDefaultPredictionConfig()
+  ) |>
+  addModuleConfig(
+    createDefaultEstimationConfig()
+  ) 
+
+# now create the shiny app based on the config file and view the results
+# based on the connection 
+ShinyAppBuilder::createShinyApp(
+  config = shinyConfig, 
+  connectionDetails = resultsConnectionDetails,
+  resultDatabaseSettings = createDefaultResultDatabaseSettings(schema = resultsDatabaseSchema)
+)
+```
