@@ -1,8 +1,7 @@
 ---
-title: "Bostat 218 Problem Set 1"
-subtitle: "Due Oct 31 @ 11:59PM in PDF via BruinLearn"
-author: "Marc A Suchard @ UCLA"
-date: "October 8, 2025"
+title: "Bostat 218 Problem Set 1 assigned by Marc A Suchard @ UCLA"
+subtitle: "Due Oct 30 @ 11:59PM in PDF via BruinLearn"
+author: "Max Vo @ MDSH UCLA"
 format:
   html:
     theme: cosmo
@@ -11,7 +10,7 @@ format:
     toc-depth: 4
     toc-location: left
     code-fold: false
-bibliography: "../ohdsi.bib"
+# bibliography: "../ohdsi.bib"
 csl: "apa.csl"
 knitr:
   opts_chunk: 
@@ -26,7 +25,6 @@ knitr:
 
 1. John is an African American man born on August 4, 1974.  Define an entry in the `PERSON` table that encodes this information.
 
-https://ohdsi.github.io/TheBookOfOhdsi/CommonDataModel.html
 
 ```{r}
 library(DBI)
@@ -36,9 +34,11 @@ cd   <- getEunomiaConnectionDetails()
 conn <- DatabaseConnector::connect(cd)
 # DBI::dbGetQuery(conn, "PRAGMA table_info(person)")
 ```
+
 ```{r}
 spec <- read.csv(system.file("csv", "OMOP_CDMv5.4_Field_Level.csv",
                              package = "CommonDataModel"))
+
 subset(spec, cdmTableName == "person",
        select = c(cdmFieldName, isRequired, cdmDatatype, userGuidance))
 ```
@@ -57,41 +57,146 @@ library(dplyr)
 
 person_spec <- spec |>
   filter(cdmTableName == "person") |>
-  select(cdmFieldName, cdmDatatype) #|>
-  #mutate(Value = NA_character_,
-  #       Explanation = NA_character_)
+  select(cdmFieldName)
 ```
 
 ```{r}
 known_entries <- tibble::tribble(
-  ~cdmFieldName,          ~Value,                 ~Explanation,
-  "person_id",            "999999",               "Arbitrary unique ID",
-  "gender_concept_id",    "8507",                 "MALE",
-  "year_of_birth",        "1974",                 "From birth date",
-  "month_of_birth",       "8",                    "From birth date",
-  "day_of_birth",         "4",                    "From birth date",
-  "birth_datetime",       "1974-08-04 00:00:00",  "Time unknown, set to midnight",
-  "race_concept_id",      "8516",                 "Black or African American",
-  "ethnicity_concept_id", "0",                    "Hispanic status not stated",
-  "person_source_value",  "John",                 "Source identifier",
-  "gender_source_value",  "male",                 "Source wording",
-  "race_source_value",    "African American",     "Source wording"
+  ~cdmFieldName,                  ~Value,                 ~Explanation,
+  "person_id",                    "5",                    "A unique integer.",
+  "gender_concept_id",            "8507",                 "The concept ID for male gender is 8507.",
+  "year_of_birth",                "1974",                 NA,
+  "month_of_birth",               "8",                    NA,
+  "day_of_birth",                 "4",                    NA,
+  "birth_datetime",               "1974-08-04 00:00:00",  "When the time is not known midnight is used.",
+  "death_datetime",               "NULL",                 NA,
+  "race_concept_id",              "8516",                 "The concept ID for black or African American is 8516.",
+  "ethnicity_concept_id",         "38003564",             "38003564 refers to \"Not hispanic\".",
+  "location_id",                  NA,                     "His address is not known.",
+  "provider_id",                  NA,                     "His primary care Provider is not known.",
+  "care_site_id",                 NA,                     "His primary Care Site is not known.",
+  "person_source_value",          "NULL",                 "Not provided.",
+  "gender_source_value",          "Man",                  "The text used in the description.",
+  "gender_source_concept_id",     "0",                    NA,
+  "race_source_value",            "African American",     "The text used in the description.",
+  "race_source_concept_id",       "0",                    NA,
+  "ethnicity_source_value",       "NULL",                 NA,
+  "ethnicity_source_concept_id",  "0",                    NA
 )
 ```
 
 ```{r}
 person_tbl <- person_spec |>
-  left_join(entries, by = "cdmFieldName") |>
-  select(-cdmDatatype)
+  left_join(known_entries, by = "cdmFieldName") |>
+  mutate(cdmFieldName = toupper(cdmFieldName)) |> # capitalize
+  rename(`Column name` = cdmFieldName)
 
-knitr::kable(person_tbl)
+knitr::kable(person_tbl, caption = "The PERSON table.")
 ```
 
 
 
 2. John enrolled in his current insurance on January 1st, 2015. The data from his insurance database were extracted on July 1st, 2019. Define an entry in the `OBSERVATION_PERIOD` table that encodes this information.
 
+```{r}
+spec <- read.csv(system.file("csv", "OMOP_CDMv5.4_Field_Level.csv",
+                             package = "CommonDataModel"))
+
+subset(spec, cdmTableName == "observation_period",
+       select = c(cdmFieldName, isRequired, cdmDatatype, userGuidance))
+```
+
+```{r}
+obs_spec <- spec |>
+  filter(cdmTableName == "observation_period") |>
+  select(cdmFieldName)
+```
+
+https://athena.ohdsi.org/search-terms/terms/44814724
+
+```{r}
+obs_entries <- tibble::tribble(
+  ~cdmFieldName,                    ~Value,        ~Explanation,
+  "observation_period_id",          "1",           "A unique integer.",
+  "person_id",                      "5",           "Links to John's row in the PERSON table.",
+  "observation_period_start_date",  "2015-01-01",  "Date he enrolled in his current insurance.",
+  "observation_period_end_date",    "2019-07-01",  "Date the insurance data were extracted.",
+  "period_type_concept_id",         "44814724",    "Concept ID for Period with Insurance"
+)
+```
+
+```{r}
+obs_tbl <- obs_spec |>
+  left_join(obs_entries, by = "cdmFieldName") |>
+  mutate(cdmFieldName = toupper(cdmFieldName)) |>
+  rename(`Column name` = cdmFieldName)
+
+knitr::kable(obs_tbl, caption = "The OBSERVATION_PERIOD table.")
+```
+
+
 3. John was prescribed a 30-day supply of Ibuprofen 200 MG Oral tablets (NDC code: 76168009520) on May 1st, 2019. Define an entry in the `DRUG_EXPOSURE` table that encodes this information.
+
+https://athena.ohdsi.org/search-terms/terms/19078461
+
+```{r}
+# obtaining the column names
+subset(spec, cdmTableName == "drug_exposure",
+       select = c(cdmFieldName, isRequired, cdmDatatype, userGuidance))
+```
+
+```{r}
+# query for ibuprofen
+DatabaseConnector::querySql(conn, "
+  SELECT concept_id, concept_name, vocabulary_id, concept_class_id
+  FROM main.concept
+  WHERE LOWER(concept_name) LIKE '%ibuprofen%'")
+
+# the codes do not seem to exist in Eunomia
+DatabaseConnector::querySql(conn, "
+  SELECT concept_id, concept_name, vocabulary_id, domain_id
+  FROM main.concept
+  WHERE domain_id = 'Route' OR vocabulary_id = 'Drug Type'")
+```
+- https://athena.ohdsi.org/search-terms/terms?domain=Route&page=1&pageSize=15&query=Oral
+- https://athena.ohdsi.org/search-terms/terms?conceptClass=Drug+Type&page=1&pageSize=15&query=prescription+written
+
+Many of the results show up when searching up the NDC code
+- https://athena.ohdsi.org/search-terms/terms?page=1&pageSize=15&query=76168009520
+- https://athena.ohdsi.org/search-terms/terms/583945
+
+```{r}
+drug_spec <- spec |>
+  filter(cdmTableName == "drug_exposure") |>
+  select(cdmFieldName)
+
+drug_entries <- tibble::tribble(
+  ~cdmFieldName,                  ~Value,                ~Explanation,
+  "drug_exposure_id",             "1",                   "A unique integer.",
+  "person_id",                    "2",                   "Links to John's row in the PERSON table.",
+  "drug_concept_id",              "19078461",            "Standard RxNorm concept for Ibuprofen 200 MG Oral Tablet (via NDC 'Maps to').",
+  "drug_exposure_start_date",     "2019-05-01",          "Date prescribed.",
+  "drug_exposure_start_datetime", "2019-05-01 00:00:00", "Time unknown, set to midnight.",
+  "drug_exposure_end_date",       "2019-05-31",          "Start date + 30-day supply.",
+  "drug_exposure_end_datetime",   "2019-05-31 00:00:00", "Time unknown, set to midnight.",
+  "drug_type_concept_id",         "38000177",            "Prescription written.",
+  "days_supply",                  "30",                  "30-day supply.",
+  "route_concept_id",             "4132161",             "Oral.",
+  "drug_source_value",            "76168009520",         "The NDC code given",
+  "drug_source_concept_id",       "583945",            "The concept ID of the NDC code itself (non-standard)."
+)
+
+options(knitr.kable.NA = "")
+
+drug_tbl <- drug_spec |>
+  left_join(drug_entries, by = "cdmFieldName") |>
+  mutate(Value = coalesce(Value, "NULL"),   # NA -> "NULL" in Value only
+         cdmFieldName = toupper(cdmFieldName)) |>
+  rename(`Column name` = cdmFieldName)
+
+knitr::kable(drug_tbl, caption = "The DRUG_EXPOSURE table.")
+```
+
 
 4. Using SQL and R, retrieve all records of the condition "Gastrointestinal hemorrhage" (with concept ID [192671](http://athena.ohdsi.org/search-terms/terms/192671)) from the `Eunomia` dataset.
 
@@ -106,29 +211,184 @@ conn <- DatabaseConnector::connect(cd)
 # disconnect(conn)
 ```
 
+```{r}
+# Testing Example provided from Book
+sql <- "SELECT *
+        FROM @cdm.condition_occurrence
+        LIMIT 1;"
+
+result <- renderTranslateQuerySql(conn, sql, cdm = "main")
+result
+```
+```{r}
+# Schemas
+DatabaseConnector::querySql(conn, "PRAGMA database_list")
+
+# Tables in the main schema
+DatabaseConnector::getTableNames(conn, databaseSchema = "main")
+```
+```{r}
+# obtain column names for exploration
+DatabaseConnector::querySql(conn, "PRAGMA table_info(condition_occurrence)")
+```
+
+
+```{r}
+# @cdm works like a parameter
+
+GI_sql <- "SELECT *
+           FROM @cdm.condition_occurrence
+           WHERE condition_concept_id = 192671;"
+
+result <- renderTranslateQuerySql(conn, GI_sql, cdm = "main")
+head(result) # display the first few rows for records under ID = 192671
+```
+```{r}
+nrow(result)
+```
+
 
 5. Using SQL and R, retrieve all records of the condition "Gastrointestinal hemorrhage" using source codes. This database uses ICD-10, and the relevant ICD-10 code is "K92.2" from the `Eunomia` dataset.
 
+https://athena.ohdsi.org/search-terms/terms/45533625
+- we can look at the results from Q4 and identify that we can  we can subset for K92.2 using the condition_source_value field in the condition_occurrence table
+
+```{r}
+sql <- "SELECT *
+        FROM @cdm.condition_occurrence
+        WHERE condition_source_value = 'K92.2';"
+
+result <- renderTranslateQuerySql(conn, sql, cdm = "main")
+head(result)
+```
+
 6. Using SQL and R, retrieve the observation period of the person with `PERSON_ID` 61 from the `Eunomia dataset.
+
+```{r}
+# obtain this information from the observation_period table instead
+
+sql <- "SELECT *
+        FROM @cdm.observation_period
+        WHERE person_id = 61;"
+
+renderTranslateQuerySql(conn, sql, cdm = "main")
+```
 
 ## Standardize vocabularies
 
 7. What is the standard concept ID for "Gastrointestinal hemorrhage"?
+
 ```{r}
 DatabaseConnector::querySql(conn, "
   SELECT concept_id, concept_name, concept_code
   FROM concept
   WHERE concept_name = 'Gastrointestinal hemorrhage';")
 ```
+Relevant Athena Search: https://athena.ohdsi.org/search-terms/terms?conceptClass=Condition&conceptClass=Disorder&standardConcept=Standard&page=1&pageSize=15&query=Gastrointestinal+hemorrhage
+
 The standard concept ID for "Gastrointestinal hemorrhage" is 192671.
+
 
 8. Which ICD-10CM codes map to the standard concept for "Gastrointestinal hemorrhage"? Which ICD-9CM codes map to this Standard Concept?
 
 
-https://github.com/OHDSI/OMOP-Queries/blob/master/md/General.md
+
+```{r}
+# uses this as a basis: https://github.com/OHDSI/OMOP-Queries/blob/master/md/General.md
+
+DatabaseConnector::querySql(conn, "
+  SELECT c2.vocabulary_id, c2.concept_code, c2.concept_name
+  FROM main.concept_relationship cr
+  JOIN main.concept c2 ON c2.concept_id = cr.concept_id_2
+  WHERE cr.concept_id_1 = 192671
+    AND cr.relationship_id = 'Mapped from'
+    AND c2.vocabulary_id IN ('ICD10CM', 'ICD9CM')")
+
+# Eunomia only has some of the concept_codes
+```
+Relevant Athena Search: https://athena.ohdsi.org/search-terms/terms?vocabulary=ICD10CM&vocabulary=ICD9CM&invalidReason=Valid&page=1&pageSize=15&query=%22Gastrointestinal+hemorrhage%22&boosts
+
+The relevant ICD-10CM:
+- K92.2 “Gastrointestinal hemorrhage, unspecified”
+
+The relevant ICD-9CM:
+- 578 “Gastrointestinal hemorrhage”
+- relevant 'subsumed terms' like 578.9
+
 
 ## Advanced SQL
 
 9. What is the minimum, maximum, and mean length (in days) of observation from the `synthetic` dataset? (Hint: you can use the `DATEDIFF` function to compute the time between two dates.)
 
+Source: https://ohdsi.r-universe.dev/DatabaseConnector/doc/manual.html
+
+```{r}
+library(DatabaseConnector)
+
+cd_synthetic <- createConnectionDetails(
+  dbms   = "duckdb",
+  server = "data/synthetic.duckdb"
+)
+conn_synthetic <- connect(cd_synthetic)
+```
+```{r}
+# compute the length of each observation period (each row)
+# DATEDIFF produces one number per row & 'day' argument is the units
+
+sql <- "
+  SELECT MIN(DATEDIFF(day, observation_period_start_date, observation_period_end_date)) AS min_days,
+         MAX(DATEDIFF(day, observation_period_start_date, observation_period_end_date)) AS max_days,
+         AVG(DATEDIFF(day, observation_period_start_date, observation_period_end_date)) AS mean_days
+  FROM @cdm.observation_period;"
+
+renderTranslateQuerySql(conn_synthetic, sql, cdm = "main")
+```
+
+```{r}
+disconnect(conn_synthetic)
+```
+
 10. How many people have at least one prescription of celecoxib from the `Eunomia` dataset? (Note: there’s an easy way to do this, using `DRUG_ERA`, and a harder way using `DRUG_EXPOSURE` and `CONCEPT_ANCESTOR`. Can you do both?)
+
+- DRUG_ERA, DRUG_EXPOSURE & CONCEPT_ANCESTOR are all tables under the main Schema
+- DRUG_ERA can be directly filtered by the ingredient_ID level
+- DRUG_EXPOSURE records specific products (e.g. Ibuprofen 200 MG Oral tablets)
+- CONCEPT_ANCESTOR links the ingredient (ancestor) to products containing it
+
+```{r}
+# identify the celecoxib concept_id & identify its concept_class_id as ingredient
+
+DatabaseConnector::querySql(conn, "
+  SELECT concept_id, concept_name, concept_class_id
+  FROM main.concept
+  WHERE LOWER(concept_name) = 'celecoxib'
+    AND vocabulary_id = 'RxNorm'")
+```
+Relevant Athena Search: https://athena.ohdsi.org/search-terms/terms/1118084
+
+```{r}
+drugera_sql <- "SELECT COUNT(DISTINCT person_id) AS n_people
+        FROM @cdm.drug_era
+        WHERE drug_concept_id = @ingredient_id;"
+
+DatabaseConnector::renderTranslateQuerySql(conn, drugera_sql,
+                                           cdm = "main",
+                                           ingredient_id = 1118084)
+```
+```{r}
+DE.CA_sql <- "
+  SELECT COUNT(DISTINCT de.person_id) AS n_people
+  FROM @cdm.drug_exposure de
+  INNER JOIN @cdm.concept_ancestor ca
+    ON ca.descendant_concept_id = de.drug_concept_id
+  WHERE ca.ancestor_concept_id = @ingredient_id;"
+
+DatabaseConnector::renderTranslateQuerySql(conn, DE.CA_sql,
+                                           cdm = "main",
+                                           ingredient_id = 1118084)
+```
+Both methods arrive at 1844 people have at least one prescription of celecoxib from the `Eunomia` dataset.
+
+```{r}
+disconnect(conn)
+```
