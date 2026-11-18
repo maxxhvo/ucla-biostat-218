@@ -1,0 +1,259 @@
+{
+  "sharedResources": [
+    {
+      "cohortDefinitions": [
+        {
+          "cohortId": 1,
+          "cohortName": "hypertensionCohort",
+          "cohortDefinition": "{\"ConceptSets\":[{\"id\":0,\"name\":\"Essential hypertension\",\"expression\":{\"items\":[{\"concept\":{\"CONCEPT_ID\":320128,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":true,\"includeMapped\":false}]}},{\"id\":1,\"name\":\"SBP\",\"expression\":{\"items\":[{\"concept\":{\"CONCEPT_ID\":3004249,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":false,\"includeMapped\":false}]}},{\"id\":2,\"name\":\"DBP\",\"expression\":{\"items\":[{\"concept\":{\"CONCEPT_ID\":3012888,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":false,\"includeMapped\":false}]}}],\"PrimaryCriteria\":{\"CriteriaList\":[{\"ConditionOccurrence\":{\"CodesetId\":0}},{\"Measurement\":{\"CodesetId\":1,\"ValueAsNumber\":{\"Op\":\"gte\",\"Value\":130},\"Unit\":[{\"CONCEPT_ID\":8876,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"}]}},{\"Measurement\":{\"CodesetId\":2,\"ValueAsNumber\":{\"Op\":\"gte\",\"Value\":80},\"Unit\":[{\"CONCEPT_ID\":8876,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"}]}}],\"ObservationWindow\":{\"PriorDays\":0,\"PostDays\":0},\"PrimaryCriteriaLimit\":{\"Type\":\"First\"}},\"QualifiedLimit\":{\"Type\":\"First\"},\"ExpressionLimit\":{\"Type\":\"First\"},\"InclusionRules\":[],\"CensoringCriteria\":[],\"CollapseSettings\":{\"CollapseType\":\"ERA\",\"EraPad\":0},\"CensorWindow\":{},\"cdmVersionRange\":\">=5.0.0\"}"
+        },
+        {
+          "cohortId": 2,
+          "cohortName": "amiCohort",
+          "cohortDefinition": "{\"ConceptSets\":[{\"id\":0,\"name\":\"Myocardial infarction\",\"expression\":{\"items\":[{\"concept\":{\"CONCEPT_ID\":4329847,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":true,\"includeMapped\":false},{\"concept\":{\"CONCEPT_ID\":314666,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":true,\"includeDescendants\":true,\"includeMapped\":false}]}},{\"id\":1,\"name\":\"Inpatient or ER\",\"expression\":{\"items\":[{\"concept\":{\"CONCEPT_ID\":9201,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":true,\"includeMapped\":false},{\"concept\":{\"CONCEPT_ID\":262,\"CONCEPT_NAME\":\"\",\"STANDARD_CONCEPT\":\"\",\"STANDARD_CONCEPT_CAPTION\":\"\",\"INVALID_REASON\":\"\",\"INVALID_REASON_CAPTION\":\"\",\"CONCEPT_CODE\":\"\",\"DOMAIN_ID\":\"\",\"VOCABULARY_ID\":\"\",\"CONCEPT_CLASS_ID\":\"\"},\"isExcluded\":false,\"includeDescendants\":true,\"includeMapped\":false}]}}],\"PrimaryCriteria\":{\"CriteriaList\":[{\"ConditionOccurrence\":{\"CodesetId\":0}}],\"ObservationWindow\":{\"PriorDays\":0,\"PostDays\":0},\"PrimaryCriteriaLimit\":{\"Type\":\"All\"}},\"AdditionalCriteria\":{\"Type\":\"ALL\",\"CriteriaList\":[{\"Criteria\":{\"VisitOccurrence\":{\"CodesetId\":1}},\"StartWindow\":{\"Start\":{\"Coeff\":-1},\"End\":{\"Days\":0,\"Coeff\":-1},\"UseIndexEnd\":false,\"UseEventEnd\":false},\"EndWindow\":{\"Start\":{\"Days\":0,\"Coeff\":-1},\"End\":{\"Coeff\":1},\"UseIndexEnd\":false,\"UseEventEnd\":true},\"Occurrence\":{\"Type\":2,\"Count\":1}}],\"DemographicCriteriaList\":[],\"Groups\":[]},\"QualifiedLimit\":{\"Type\":\"All\"},\"ExpressionLimit\":{\"Type\":\"First\"},\"InclusionRules\":[{\"name\":\"No prior AMI\",\"expression\":{\"Type\":\"ALL\",\"CriteriaList\":[{\"Criteria\":{\"ConditionOccurrence\":{\"CodesetId\":0}},\"StartWindow\":{\"Start\":{\"Days\":365,\"Coeff\":-1},\"End\":{\"Days\":1,\"Coeff\":-1},\"UseIndexEnd\":false,\"UseEventEnd\":false},\"Occurrence\":{\"Type\":0,\"Count\":0}}],\"DemographicCriteriaList\":[],\"Groups\":[]}}],\"EndStrategy\":{\"DateOffset\":{\"DateField\":\"StartDate\",\"Offset\":1}},\"CensoringCriteria\":[],\"CollapseSettings\":{\"CollapseType\":\"ERA\",\"EraPad\":0},\"CensorWindow\":{},\"cdmVersionRange\":\">=5.0.0\"}"
+        }
+      ],
+      "attr_class": ["CohortDefinitionSharedResources", "SharedResources"]
+    }
+  ],
+  "moduleSpecifications": [
+    {
+      "module": "CohortGeneratorModule",
+      "settings": {
+        "generateStats": true
+      },
+      "attr_class": ["ModuleSpecifications", "CohortGeneratorModuleSpecifications"]
+    },
+    {
+      "module": "CharacterizationModule",
+      "settings": {
+        "analysis": {
+          "timeToEventSettings": [
+            {
+              "targetIds": 1,
+              "outcomeIds": 2,
+              "attr_class": "timeToEventSettings"
+            }
+          ],
+          "dechallengeRechallengeSettings": [
+            {
+              "targetCohortDefinitionIds": 1,
+              "outcomeCohortDefinitionIds": 2,
+              "dechallengeStopInterval": 30,
+              "dechallengeEvaluationWindow": 30,
+              "attr_class": "dechallengeRechallengeSettings"
+            }
+          ],
+          "targetBaselineSettings": [
+            {
+              "targetIds": 1,
+              "limitToFirstInNDays": 99999,
+              "minPriorObservation": 365,
+              "covariateSettings": [
+                {
+                  "temporal": false,
+                  "temporalSequence": false,
+                  "DemographicsGender": true,
+                  "DemographicsAgeGroup": true,
+                  "DemographicsRace": true,
+                  "DemographicsEthnicity": true,
+                  "DemographicsIndexYear": true,
+                  "DemographicsIndexMonth": true,
+                  "ConditionGroupEraLongTerm": true,
+                  "ConditionGroupEraShortTerm": true,
+                  "DrugGroupEraLongTerm": true,
+                  "DrugGroupEraShortTerm": true,
+                  "DrugGroupEraOverlapping": true,
+                  "ProcedureOccurrenceLongTerm": true,
+                  "ProcedureOccurrenceShortTerm": true,
+                  "DeviceExposureLongTerm": true,
+                  "DeviceExposureShortTerm": true,
+                  "MeasurementLongTerm": true,
+                  "MeasurementShortTerm": true,
+                  "MeasurementRangeGroupLongTerm": true,
+                  "MeasurementRangeGroupShortTerm": true,
+                  "MeasurementValueAsConceptLongTerm": true,
+                  "MeasurementValueAsConceptShortTerm": true,
+                  "ObservationLongTerm": true,
+                  "ObservationShortTerm": true,
+                  "ObservationValueAsConceptLongTerm": true,
+                  "ObservationValueAsConceptShortTerm": true,
+                  "CharlsonIndex": true,
+                  "Dcsi": true,
+                  "Chads2": true,
+                  "Chads2Vasc": true,
+                  "includedCovariateConceptIds": [],
+                  "includedCovariateIds": [],
+                  "addDescendantsToInclude": false,
+                  "excludedCovariateConceptIds": [],
+                  "addDescendantsToExclude": false,
+                  "shortTermStartDays": -30,
+                  "mediumTermStartDays": -180,
+                  "endDays": 0,
+                  "longTermStartDays": -365,
+                  "attr_class": "covariateSettings",
+                  "attr_fun": "getDbDefaultCovariateData"
+                }
+              ],
+              "attr_class": "targetBaselineSettings"
+            }
+          ],
+          "riskFactorSettings": [
+            {
+              "targetIds": 1,
+              "limitToFirstInNDays": 99999,
+              "minPriorObservation": 365,
+              "outcomeIds": 2,
+              "outcomeWashoutDays": 365,
+              "riskWindowStart": 1,
+              "startAnchor": "cohort_start",
+              "riskWindowEnd": 0,
+              "endAnchor": "cohort_end",
+              "covariateSettings": [
+                {
+                  "temporal": false,
+                  "temporalSequence": false,
+                  "DemographicsGender": true,
+                  "DemographicsAgeGroup": true,
+                  "DemographicsRace": true,
+                  "DemographicsEthnicity": true,
+                  "DemographicsIndexYear": true,
+                  "DemographicsIndexMonth": true,
+                  "ConditionGroupEraLongTerm": true,
+                  "ConditionGroupEraShortTerm": true,
+                  "DrugGroupEraLongTerm": true,
+                  "DrugGroupEraShortTerm": true,
+                  "DrugGroupEraOverlapping": true,
+                  "ProcedureOccurrenceLongTerm": true,
+                  "ProcedureOccurrenceShortTerm": true,
+                  "DeviceExposureLongTerm": true,
+                  "DeviceExposureShortTerm": true,
+                  "MeasurementLongTerm": true,
+                  "MeasurementShortTerm": true,
+                  "MeasurementRangeGroupLongTerm": true,
+                  "MeasurementRangeGroupShortTerm": true,
+                  "MeasurementValueAsConceptLongTerm": true,
+                  "MeasurementValueAsConceptShortTerm": true,
+                  "ObservationLongTerm": true,
+                  "ObservationShortTerm": true,
+                  "ObservationValueAsConceptLongTerm": true,
+                  "ObservationValueAsConceptShortTerm": true,
+                  "CharlsonIndex": true,
+                  "Dcsi": true,
+                  "Chads2": true,
+                  "Chads2Vasc": true,
+                  "includedCovariateConceptIds": [],
+                  "includedCovariateIds": [],
+                  "addDescendantsToInclude": false,
+                  "excludedCovariateConceptIds": [],
+                  "addDescendantsToExclude": false,
+                  "shortTermStartDays": -30,
+                  "mediumTermStartDays": -180,
+                  "endDays": 0,
+                  "longTermStartDays": -365,
+                  "attr_class": "covariateSettings",
+                  "attr_fun": "getDbDefaultCovariateData"
+                }
+              ],
+              "minTargetSize": 0,
+              "minTwithOSize": 0,
+              "attr_class": "riskFactorSettings"
+            }
+          ],
+          "caseSeriesSettings": [
+            {
+              "targetIds": 1,
+              "limitToFirstInNDays": 99999,
+              "minPriorObservation": 365,
+              "outcomeIds": 2,
+              "outcomeWashoutDays": 365,
+              "riskWindowStart": 1,
+              "startAnchor": "cohort_start",
+              "riskWindowEnd": 0,
+              "endAnchor": "cohort_end",
+              "caseCovariateSettings": [
+                {
+                  "temporal": false,
+                  "temporalSequence": false,
+                  "ConditionGroupEraDuring": true,
+                  "DrugGroupEraDuring": true,
+                  "ProcedureOccurrenceDuring": true,
+                  "DeviceExposureDuring": true,
+                  "MeasurementDuring": true,
+                  "ObservationDuring": true,
+                  "VisitConceptCountDuring": true,
+                  "includedCovariateConceptIds": [],
+                  "addDescendantsToInclude": false,
+                  "excludedCovariateConceptIds": [],
+                  "addDescendantsToExclude": false,
+                  "includedCovariateIds": [],
+                  "attr_class": "covariateSettings",
+                  "attr_fun": "Characterization::getDbDuringCovariateData"
+                }
+              ],
+              "casePreTargetDuration": 365,
+              "casePostOutcomeDuration": 365,
+              "attr_class": "caseSeriesSettings"
+            }
+          ],
+          "attr_class": "characterizationSettings"
+        },
+        "minCharacterizationMean": 0.01,
+        "mode": "CohortIncidence",
+        "minSMD": 0.01,
+        "minCovariateCount": 5,
+        "outputTable": "characterization_cohorts"
+      },
+      "attr_class": ["ModuleSpecifications", "CharacterizationModuleSpecifications"]
+    },
+    {
+      "module": "CohortIncidenceModule",
+      "settings": {
+        "irDesign": {
+          "targetDefs": [
+            {
+              "id": 1,
+              "name": "hypertensionCohort"
+            }
+          ],
+          "outcomeDefs": [
+            {
+              "id": 1,
+              "name": "amiCohort",
+              "cohortId": 2,
+              "cleanWindow": 365
+            }
+          ],
+          "timeAtRiskDefs": [
+            {
+              "id": 1,
+              "start": {
+                "dateField": "start",
+                "offset": 0
+              },
+              "end": {
+                "dateField": "end",
+                "offset": 0
+              }
+            }
+          ],
+          "analysisList": [
+            {
+              "targets": 1,
+              "outcomes": 1,
+              "tars": 1
+            }
+          ],
+          "strataSettings": {
+            "byAge": true,
+            "byGender": true,
+            "byYear": true,
+            "ageBreaks": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]
+          }
+        }
+      },
+      "attr_class": ["ModuleSpecifications", "CohortIncidenceModuleSpecifications"]
+    }
+  ],
+  "attr_class": "AnalysisSpecifications"
+}
